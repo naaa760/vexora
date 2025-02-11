@@ -1,40 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# Arxiv RAG
 
-## Getting Started
+## Introduction
+Arxiv RAG is a web application and API designed for generating notes and answering questions on Arxiv papers using Large Language Models (LLMs). This project leverages the Unstructured API for parsing and chunking PDFs and Supabase for the PostgreSQL database and querying embeddings.
 
-First, run the development server:
+## Setup
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Prerequisites
+- Docker
+- Node.js
+- Yarn package manager
+- Supabase account
+- Unstructured API key
+
+### Environment Configuration
+Create a `.env.development.local` file in the `./api` directory with the following content:
+
+```shell
+UNSTRUCTURED_API_KEY=<YOUR_API_KEY>
+SUPABASE_PRIVATE_KEY=<YOUR_API_KEY>
+SUPABASE_URL=<YOUR_URL>
+OPENAI_API_KEY=<YOUR_API_KEY>
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Starting Unstructured with Docker
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+Start a local instance of Unstructured with the following Docker command:
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+```shell
+docker run -p 8000:8000 -d --rm --name unstructured-api quay.io/unstructured-io/unstructured-api:latest --port 8000 --host 0.0.0.0
+```
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+### Database Setup in Supabase
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Execute the following SQL commands in your Supabase project to set up the required database structure:
 
-## Learn More
+```sql
+-- Enable the pgvector extension
+create extension vector;
 
-To learn more about Next.js, take a look at the following resources:
+-- Create tables for storing Arxiv papers, embeddings, and question answering data
+CREATE TABLE arxiv_papers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  paper TEXT,
+  arxiv_url TEXT,
+  notes JSONB[],
+  name TEXT
+);
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
+CREATE TABLE arxiv_embeddings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  content TEXT,
+  embedding vector,
+  metadata JSONB
+);
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+CREATE TABLE arxiv_question_answering (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  question TEXT,
+  answer TEXT,
+  followup_questions TEXT[],
+  context TEXT
+);
 
-## Deploy on Vercel
+-- Create a function for document matching
+create function match_documents (
+  query_embedding vector(1536),
+  match_count int DEFAULT null,
+  filter jsonb DEFAULT '{}'
+) returns table (
+  id UUID,
+  content text,
+  metadata jsonb,
+  embedding vector,
+  similarity float
+)
+language plpgsql
+as $$
+#variable_conflict use_column
+begin
+  return query
+  select
+    id,
+    content,
+    metadata,
+    embedding,
+    1 - (arxiv_embeddings.embedding <=> query_embedding) as similarity
+  from arxiv_embeddings
+  where metadata @> filter
+  order by arxiv_embeddings.embedding <=> query_embedding
+  limit match_count;
+end;
+$$;
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Supabase Type Generation
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+Add your project ID to the Supabase generate types script in package.json:
+
+```json
+{
+  "gen:supabase:types": "touch ./src/generated.ts && supabase gen types typescript --schema public > ./src/generated.ts --project-id <YOUR_PROJECT_ID>"
+}
+```
+
+## Running the Application
+
+### Build the API Server
+
+```shell
+yarn build
+```
+
+### Start the API Server
+
+```shell
+yarn start:api
+```
+
+### Start the Web Server
+
+```shell
+yarn start:web
+```
