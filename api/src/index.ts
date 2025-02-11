@@ -1,11 +1,19 @@
 import axios from "axios";
 import { PDFDocument } from "pdf-lib";
+import { Document } from "langchain/document";
 
-async function deletePages(pdf: Buffer, pagesToDelete: number[]) {
+async function deletePages(
+  pdf: Buffer,
+  pagesToDelete: number[]
+): Promise<Buffer> {
   const pdfDoc = await PDFDocument.load(pdf);
   let numToOffsetBy = 1;
+  for (const pageNum of pagesToDelete) {
+    pdfDoc.removePage(pageNum - numToOffsetBy);
+    numToOffsetBy++;
+  }
   const pdfBytes = await pdfDoc.save();
-  return pdfBytes;
+  return Buffer.from(pdfBytes);
 }
 
 async function loadPdfFromUrl(url: string): Promise<Buffer> {
@@ -14,6 +22,8 @@ async function loadPdfFromUrl(url: string): Promise<Buffer> {
   });
   return response.data;
 }
+
+async function convertPdfToDocuments(pdf: Buffer): Promise<Array<Document>> {}
 
 async function main({
   paperUrl,
@@ -27,8 +37,8 @@ async function main({
   if (!paperUrl.endsWith("pdf")) {
     throw new Error("Not a pdf");
   }
-  const pdfAsBuffer = await loadPdfFromUrl(paperUrl);
+  let pdfAsBuffer = await loadPdfFromUrl(paperUrl);
   if (pagesToDelete && pagesToDelete.length > 0) {
-    // TODO: delete pages
+    pdfAsBuffer = await deletePages(pdfAsBuffer, pagesToDelete);
   }
 }
