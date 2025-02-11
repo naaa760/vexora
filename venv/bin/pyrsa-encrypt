@@ -1,4 +1,4 @@
-#!/home/neha/vexora/venv/bin/python
+#!/home/neha/vexora/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
