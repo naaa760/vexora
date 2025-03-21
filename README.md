@@ -1,3 +1,5 @@
+## Please first open the us_census folder in the repo where the PDF is imported or generate the data in this project whatever you asked from this pdf the data will be generated in this application.
+
 # Vexora - Document Q&A with Gemma Model ✨
 
 ![image](https://github.com/user-attachments/assets/161d6588-c7ae-4d76-930f-7240e4a8287f)
